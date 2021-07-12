@@ -6,26 +6,15 @@ General package for hard target processing of radar data in the __digital\_rf__ 
 
 This library is only intended for use on Unix systems.
 
-First compile the c library
+The library can be installed through pip
+
 ```bash
-make all
+pip install hardtarget
 ```
 
-Optionally the CUDA library
-```bash
-make cuda
-```
+If there is an available cuda compiler in the environment, then both a CUDA library and a C library will be compiled. If no CUDA compiler is found, then only the C code will be compiled.
 
-Then install the python dependencies as listed in the `requirements` file.
-```bash
-make ALL
-pip install -r requirements
-```
 
-If `libfftw3` is not installed, install it using your package manager, e.g.
-```bash
-sudo apt install libfftw3
-```
 
 ## Usage
 
@@ -94,10 +83,17 @@ n_ipp=10
 
 The program is divided into several sub-programs. The main program that performs the GMF analysis is `analyze_gmf.py`. This supports use of MPI for parallel execution. It is run together with the configuration file, which is a mandatory parameter:
 ```bash
-python analyze_gmf.py config.ini
+python -m hardtarget.analyze_gmf config.ini
 ```
 There is also an end-to-end test, which includes a raw voltage simulator that creates a dataset and analyzes it. This can be used to test the performance of the analysis program and to validate the results. This also includes use of an additional refinement step that is used to refine the detected targets:
+
+To run the simulator using the compiled C code:
 ```bash
-python run_sim.py 
+python -m hardtarget 
+```
+
+To run the simulator using the compiled CUDA code:
+```bash
+pythin -m hardtarget gpu
 ```
 

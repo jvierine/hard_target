@@ -1,13 +1,15 @@
 import ctypes as C
 import numpy as n
 import time
-
-_fmed = n.ctypeslib.load_library('libgmf', './Ccode')
+import matplotlib.pyplot as plt
+from. import __path__
+# compile with Makefile
+_fmed = n.ctypeslib.load_library(__path__[0]+'/libgmfgpu', './Ccode')
 _fmed.gmf.restype = C.c_int
-_fmed.gmf.argtypes = [C.POINTER(C.c_float), C.c_int, C.POINTER(C.c_float), C.c_int, C.POINTER(C.c_float), C.c_int, C.POINTER(C.c_float), C.c_int, C.c_int, C.POINTER(C.c_float), C.POINTER(C.c_float), C.POINTER(C.c_float), C.POINTER(C.c_float)]
+_fmed.gmf.argtypes = [C.POINTER(C.c_float), C.c_int, C.POINTER(C.c_float), C.c_int, C.POINTER(C.c_float), C.c_int, C.POINTER(C.c_float), C.c_int, C.c_int, C.POINTER(C.c_float), C.POINTER(C.c_float), C.POINTER(C.c_float), C.POINTER(C.c_float), C.c_int]
 
 def gmf(z_tx, z_rx, acc_phasors, rgs, dec, gmf_vec, gmf_dc_vec, v_vec, a_vec, rank=0):
-    print("Using C")
+    print("Using GPU")
     txlen=int(len(z_tx))
     rxlen=len(z_rx)
     a=_fmed.gmf(z_tx.ctypes.data_as(C.POINTER(C.c_float)),
@@ -22,12 +24,11 @@ def gmf(z_tx, z_rx, acc_phasors, rgs, dec, gmf_vec, gmf_dc_vec, v_vec, a_vec, ra
                 gmf_vec.ctypes.data_as(C.POINTER(C.c_float)),
                 gmf_dc_vec.ctypes.data_as(C.POINTER(C.c_float)),
                 v_vec.ctypes.data_as(C.POINTER(C.c_float)),
-                a_vec.ctypes.data_as(C.POINTER(C.c_float)))
-
+                a_vec.ctypes.data_as(C.POINTER(C.c_float)),
+                rank)
     return(1)
 
 def basic_test():
-    import matplotlib.pyplot as plt
     z_tx=n.zeros(10000,dtype=n.complex64)
     z_rx=n.zeros(12000,dtype=n.complex64)    
     for i in range(10):
@@ -49,12 +50,18 @@ def basic_test():
     for i in range(20):
         gmf(z_tx,z_rx,acc_phasors,rgs,dec,gmf_vec,gmf_dc_vec,v_vec,a_vec)
     cput1=time.time()
+    plt.plot(gmf_vec)
+    plt.show()
+    plt.plot(gmf_dc_vec)
+    plt.show()
+    plt.plot(v_vec)
+    plt.show()
+    plt.plot(a_vec)
+    plt.show()
     print("Execution time %1.2f"%(cput1-cput0))
     ri=n.argmax(gmf_vec)
-    print("Got")
-    print("Rmax %d gmf %1.2f v %1.2f a %1.2f"%(ri,gmf_vec[ri],v_vec[ri],a_vec[ri]))
-    print("Should be")
-    print("Rmax 500 gmf 1e+04 v 0.00 a 0.00")
+    print("Rmax %d gmf %1.2g v %1.2f a %1.2f"%(ri,gmf_vec[ri],v_vec[ri],a_vec[ri]))
+
 
 if __name__ == "__main__":
     basic_test()

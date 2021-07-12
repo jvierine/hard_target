@@ -1,8 +1,4 @@
-import digital_rf as drf
 import numpy as n
-import h5py
-import scipy.fftpack as fft
-import time
 import scipy.constants as sc
 import os
 
@@ -46,7 +42,7 @@ class gmf_opts:
         c=configparser.ConfigParser()
         # initialize with default values
         c["config"]={"n_ipp":'5',
-                     "data_dirs":'["/data0/2020.10.15/test1e6_4.04e6","/data1/2020.10.15/test1e6_4.04e6"]',
+                     "data_dirs":'["/data0/2020.10.15/test1e6_4.04e6","/data1/2020.10.15/test1e6_4.04e6"]', # Data options, should not have default
                      "sample_rate":'1000000',
                      "n_range_gates":'10000',
                      "range_gate_0":'200',
@@ -62,11 +58,11 @@ class gmf_opts:
                      "snr_thresh":"10.0",                     
                      "save_parameters":'true',
                      "doppler_sign":'1.0',
-                     "rx_channel":'"ch"',
-                     "tx_channel":'"ch"',
+                     "rx_channel":'"ch"', # Data options, should not have default
+                     "tx_channel":'"ch"', # Data options, should not have default
                      "radar_frequency":'500e6',
                      "reanalyze":"true",
-                     "output_dir":'"./spade_det"',
+                     "output_dir":'"./spade_det"', # Data options, should not have default
                      "debug_plot":'true',
                      "debug_plot_acc":'true',
                      "debug_print":'true',

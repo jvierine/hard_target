@@ -3,13 +3,12 @@
 import h5py
 import numpy as n
 import os
-import time
 import sys
 
 import digital_rf as drf
-import gmf_opts as go
+from . import gmf_opts as go
 import stuffr
-import gmf as g
+from . import analyze_ipps as g
 
 try:
     from mpi4py import MPI

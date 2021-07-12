@@ -1,13 +1,5 @@
-import digital_rf as drf
 import numpy as n
-import h5py
-import stuffr
-import scipy.fftpack as fft
 import time
-import scipy.constants as c
-import scipy.io as sio
-
-import os
 
 try:
     from mpi4py import MPI
@@ -25,11 +17,11 @@ def analyze_ipps(d,i0,o):
    
     # we can use one of several implementations
     if o.use_gpu:
-        import gmfgpu as g
+        from .gmf import gmfgpu as g
     elif o.use_python:
-        import gmf_cpu_numpy as g
+        from .gmf import gmf_cpu_numpy as g
     else:
-        import gmf_c as g
+        from .gmf import gmf_c as g
         
     cput0=time.time()
     
@@ -61,7 +53,7 @@ def analyze_ipps(d,i0,o):
     z_tx=n.conj(z_tx)/tx_amp
 
     if o.debug_plot_data_read:
-#        import matplotlib.pyplot as plt
+        # import matplotlib.pyplot as plt
         plt.plot(z_tx.real)
         plt.plot(z_tx.imag)
         plt.title("tx")

@@ -3,16 +3,18 @@
 # First stage course GMF grid search
 # Numpy, C, CUDA
 # Simulate raw voltage measurement
-import sim_raw as sr
+from ..simulation import sim_raw as sr
 # Options class
-import gmf_opts as go
+from ..analysis import gmf_opts as go
+from ..analysis import analyze_ipps as g
+
 import numpy as n
 import os
 import time
 import h5py
 import scipy.constants as c
 import digital_rf as drf
-import gmf as g
+
 
 try:
     from mpi4py import MPI
@@ -23,9 +25,11 @@ except ImportError:
         size = 1
     comm = COMM_WORLD()
 
+SIMDIR = '/tmp/hardtarget'
+
 class sim_conf:
     def __init__(self,
-                 dirname="/scratch/data/juha/debsim",
+                 dirname=SIMDIR,
                  sr_mhz=1,
                  tx_len_us=2000,
                  ipp_us=10000,
@@ -39,6 +43,7 @@ class sim_conf:
         """
         
         # after signal processing
+        # Config for the simulator
         self.tx_len=tx_len_us*sr_mhz
         self.ipp=ipp_us*sr_mhz
         self.bit_len=bit_len_us*sr_mhz
@@ -73,7 +78,7 @@ class sim_conf:
         num_cohints_per_file=1
         snr_thresh=10.0
         """
-        with open("cfg/sim-%d.ini"%(comm.rank),"w") as f:
+        with open(SIMDIR + "/sim-%d.ini"%(comm.rank),"w") as f:
             f.writelines(cfg)
             # sample-rate specific configuration options
             f.write("data_dirs=[\"%s\"]\n"%(self.dirname))
@@ -114,7 +119,7 @@ class sim_conf:
         range_gate_step=1
         """
         
-        with open("cfg/sim_fine-%d.ini"%(comm.rank),"w") as f:
+        with open(SIMDIR + "/sim_fine-%d.ini"%(comm.rank),"w") as f:
             f.writelines(fine_tune_cfg)
             # sample-rate specific configuration options
             f.write("data_dirs=[\"%s\"]\n"%(self.dirname))
@@ -130,8 +135,8 @@ class sim_conf:
                 f.write("use_gpu=false")
             
         
-        self.conf=go.gmf_opts("cfg/sim-%d.ini"%(comm.rank))
-        self.conf_fine=go.gmf_opts("cfg/sim_fine-%d.ini"%(comm.rank))
+        self.conf=go.gmf_opts(SIMDIR + "/sim-%d.ini"%(comm.rank))
+        self.conf_fine=go.gmf_opts(SIMDIR + "/sim_fine-%d.ini"%(comm.rank))
 
 def run_cohint(d,conf,i0,r0):
     """
@@ -334,16 +339,24 @@ def n_ipp_sweep():
     ho["finetune_time"]=n_ipp_results[:,5]
     ho.close()
 
-if __name__ == "__main__":
+def start_sim(gpu):
+    #Try to create a hardtarget directory in tmp to do simulation
+    try:
+        os.mkdir('/tmp/hardtarget')
+    #If it allready exists, then don't care
+    except FileExistsError:
+        pass
     
-    sconf=sim_conf(dirname="/scratch/data/juha/debsim",
+    sconf=sim_conf(
                   sr_mhz=4,
                   tx_len_us=2000,
                   ipp_us=10000,
                   bit_len_us=100,
                   max_doppler_vel=10e3,
                   radar_frequency=230e6,
-                  n_ipp=10)
+                  n_ipp=10,
+                  use_gpu=gpu,
+                  )
 
     samps = 10
 
@@ -361,12 +374,10 @@ if __name__ == "__main__":
         
         print(f'[sample {i}/{samps}]')
 
-    stds = n.std(res_mat, axis=0)
+    stds = n.nanstd(res_mat, axis=0)
     print(f'sn_std = {stds[0]}, r_std={stds[1]} m, v_std={stds[2]} m/s, a_std={stds[3]} m/s^2')
-
-    #n_ipp_sweep()
-    #snr_sweep()
     
-
+if __name__ == "__main__":
+    start_sim()
     
     

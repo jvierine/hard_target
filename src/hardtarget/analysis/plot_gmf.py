@@ -1,5 +1,5 @@
 
-import gmf_opts as go
+from . import gmf_opts as go
 import glob
 import sys
 import h5py

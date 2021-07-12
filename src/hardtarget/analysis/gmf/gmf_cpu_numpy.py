@@ -35,8 +35,8 @@ def analyze_ipps(d,i0,o,mode=0,plott=False):
 
     if plott:
         # plot echo
-        plt.plot(z.real)
-        plt.plot(z.imag)
+        plt.plot(z_tx.real)
+        plt.plot(z_tx.imag)
         plt.title("Echo")
         plt.show()
 
