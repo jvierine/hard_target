@@ -93,6 +93,9 @@ class gmf_opts:
 
         self.n_ipp=int(json.loads(c["config"]["n_ipp"]))
         self.data_dirs=json.loads(c["config"]["data_dirs"])
+        # for conversion
+        self.eiscat_dir=json.loads(c["config"]["eiscat_dir"])
+        self.drf_dir=json.loads(c["config"]["drf_dir"])                
         print(self.data_dirs)
         self.sample_rate=float(json.loads(c["config"]["sample_rate"]))
         self.n_range_gates=int(json.loads(c["config"]["n_range_gates"]))
@@ -115,7 +118,7 @@ class gmf_opts:
         self.debug_plot=bool(json.loads(c["config"]["debug_plot"]))
         self.debug_plot_acc=bool(json.loads(c["config"]["debug_plot_acc"]))
         self.debug_print=bool(json.loads(c["config"]["debug_print"]))
-        self.debug_plot_data_read=False
+        self.debug_plot_data_read=bool(json.loads(c["config"]["debug_plot_data_read"]))
         self.num_cohints_per_file=int(json.loads(c["config"]["num_cohints_per_file"]))
         self.use_gpu=bool(json.loads(c["config"]["use_gpu"]))
         self.use_python=bool(json.loads(c["config"]["use_python"]))

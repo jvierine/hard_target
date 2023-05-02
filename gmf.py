@@ -36,6 +36,12 @@ def analyze_ipps(d,i0,o):
     # read data vector with n_ipps, and a little extra
     z=d.read_vector_c81d(i0,(o.n_ipp+o.n_extra)*o.ipp,o.rx_channel)
 
+    print(len(z))
+    print(z)
+    plt.plot(z.real)
+    plt.plot(z.imag)    
+    plt.show()
+
     if o.debug_plot_data_read:
         plt.plot(z.real)
         plt.plot(z.imag)
