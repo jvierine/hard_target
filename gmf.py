@@ -19,7 +19,10 @@ except ImportError:
     comm = COMM_WORLD()
 
 def analyze_ipps(d,i0,o):
-    
+    """
+    Analyze with GMF starting from i0 samples since 1970 in digital rf data object d, with options o.
+    Returns None if something fails
+    """
     if o.debug_plot_data_read:
         import matplotlib.pyplot as plt
    
@@ -36,11 +39,9 @@ def analyze_ipps(d,i0,o):
     # read data vector with n_ipps, and a little extra
     z=d.read_vector_c81d(i0,(o.n_ipp+o.n_extra)*o.ipp,o.rx_channel)
 
-    print(len(z))
-    print(z)
-    plt.plot(z.real)
-    plt.plot(z.imag)    
-    plt.show()
+    if n.sum(n.isnan(z)) > 0:
+        print("There are %d/%d NAN values in data vector. Skipping this integration period."%(n.sum(n.isnan(z)),len(z)))
+        return(None)
 
     if o.debug_plot_data_read:
         plt.plot(z.real)
@@ -53,6 +54,7 @@ def analyze_ipps(d,i0,o):
     if o.tx_channel != o.rx_channel:
         z=d.read_vector_c81d(i0,(o.n_ipp+o.n_extra)*o.ipp,o.tx_channel)
     z_tx=n.copy(z)
+
     
     # clean ground clutter, get separate transmit waveform and echo vectors
     z_tx=z_tx*o.tx_stencil
@@ -105,4 +107,4 @@ def analyze_ipps(d,i0,o):
     avec=o.accs[n.array(a_vec,dtype=n.int)]
     vvec=o.range_rates[n.array(v_vec,dtype=n.int)]
     
-    return(gmf_vec,gmf_dc_vec,vvec,avec,tx_amp**2.0)
+    return({"gmf":gmf_vec,"gmf_dc":gmf_dc_vec,"vel":vvec,"acc":avec,"tx_pwr":tx_amp**2.0})

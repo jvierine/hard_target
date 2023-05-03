@@ -26,8 +26,67 @@ import scipy.optimize as sio
 
 import os
 
+def gmf(z_tx, z_rx, acc_phasors, rgs, dec, gmf_vec, gmf_dc_vec, v_vec, a_vec, rank=0):
+    """
+    z_tx is the conjugated vector containing transmit envelope (with echoes zeroed out)
+    z_rx is the vector containing echoes (with tx and grond clutter zeroed out)
+    acc_phasors is a matrix containing acceleration phase corrections
+    rgs is a vector of range gates to search
+    dec is the amount of frequency decimation to use
+    gmf_vec is the output generalized match function value
+    gmf_dc_vec is the GMF value at zero Doppler. This is useful for estimating the noise power.
+    v_vec is the vector of velocities as a function of range that maximimze GMF 
+    a_vec is the vector of accelerations as a function of range that maximimze GMF 
+    rank is the process number, which can be used when paralellizing the GMF operation with e.g., MPI
+    """
+    max_r=0
+    max_v=0
+    max_a=0
+    max_mf=0
+#    gmf_vec=n.zeros(o.n_range_gates,dtype=n.float32)
+ #   v_vec=n.zeros(o.n_range_gates,dtype=n.float32)
+  #  a_vec=n.zeros(o.n_range_gates,dtype=n.float32)        
+   # gmf_dc_vec=n.zeros(o.n_range_gates,dtype=n.float32)
 
-def analyze_ipps(d,i0,o,mode=0,plott=False):
+    # implement this in C
+    #
+    # gmf.mf(z_tx, o.n_fft, z_rx,len(z_rx), o.acc_phasors, o.n_accs, o.rgs,o.fdec,gmf_vec,gmf_dc_vec,v_vec,a_vec)
+#    GA=n.zeros([len(o.accs),len(o.rgs)])
+ #   GV=n.zeros([int(o.n_fft/o.frequency_decimation),len(o.rgs)])
+    n_fft = int(len(z_tx)/dec)
+    n_accs = acc_phasors.shape[0]
+    txlen = len(z_tx)
+    
+    for ri,rg in enumerate(rgs):
+        # range matching echo*conj(tx)
+        rgi = int(rg)
+        echo=stuffr.decimate(z_rx[rgi:(rgi+txlen)]*z_tx,dec=dec)*dec
+        
+        # go through all accelerations
+        for ai in range(n_accs):
+            # go through all doppler shifts with FFT (this is a grid search of
+            # all possible doppler velocities)
+            gmf=n.abs(fft.fft(acc_phasors[ai,:]*echo,len(echo)))**2.0
+            mi=n.argmax(gmf)
+            
+#            GA[ai,ri]=gmf[mi]
+
+            # Use zero acceleration and zero doppler for DC output (noise floor estimation)
+            if ai==0:
+                gmf_dc_vec[ri]=gmf[0]
+
+            # did we find a better GMF output at this acceleration
+            if gmf[mi]>gmf_vec[ri]: 
+                gmf_vec[ri]=gmf[mi]
+                v_vec[ri]=mi # store indices
+                a_vec[ri]=ai
+    return(1)
+#    plt.pcolormesh(o.rgs,o.accs,GA)
+#    plt.show()
+
+    
+# obsolete code. delete later
+def obsolete_analyze_ipps(d,i0,o,mode=0,plott=False):
     print("Using numpy")
     # read data vector with n_ipps, and a little extra
     z_tx=d.read_vector_c81d(i0,(o.n_ipp+o.n_extra)*o.ipp,o.tx_channel)
@@ -54,6 +113,17 @@ def analyze_ipps(d,i0,o,mode=0,plott=False):
     # conjugate, so that when matched filtering, it will cancel out phase of transmit waveform.
     z_tx=n.conj(z_tx)
 
+    # maximum match function value
+    gmf_vec=n.zeros(o.n_range_gates,dtype=n.float32)
+    # best fitting range-rate
+    v_vec=n.zeros(o.n_range_gates,dtype=n.float32)
+    # best fitting range-rate change
+    a_vec=n.zeros(o.n_range_gates,dtype=n.float32)
+    # 0-frequency gmf output
+    gmf_dc_vec=n.zeros(o.n_range_gates,dtype=n.float32)
+    
+    gmf(z_tx, z_rx, o.acc_phasors, o.rgs_float, o.frequency_decimation, gmf_vec, gmf_dc_vec, v_vec, a_vec)
+
     if plott:
         # plot tx
         plt.plot(z_tx.real)
@@ -68,42 +138,6 @@ def analyze_ipps(d,i0,o,mode=0,plott=False):
         plt.show()
 
     cput0=time.time()
-    max_r=0
-    max_v=0
-    max_a=0
-    max_mf=0
-    gmf_vec=n.zeros(o.n_range_gates,dtype=n.float32)
-    v_vec=n.zeros(o.n_range_gates,dtype=n.float32)
-    a_vec=n.zeros(o.n_range_gates,dtype=n.float32)        
-    gmf_dc_vec=n.zeros(o.n_range_gates,dtype=n.float32)
-
-    # implement this in C
-    #
-    # gmf.mf(z_tx, o.n_fft, z_rx,len(z_rx), o.acc_phasors, o.n_accs, o.rgs,o.fdec,gmf_vec,gmf_dc_vec,v_vec,a_vec)
-    GA=n.zeros([len(o.accs),len(o.rgs)])
-    GV=n.zeros([int(o.n_fft/o.frequency_decimation),len(o.rgs)])    
-    for ri,rg in enumerate(o.rgs):
-        # range matching echo*conj(tx)
-        echo=stuffr.decimate(z_rx[rg:(rg+o.n_fft)]*z_tx,dec=o.frequency_decimation)
-        
-        # go through all accelerations
-        for ai,a in enumerate(o.accs):
-            # go through all doppler shifts with FFT (this is a grid search of
-            # all possible doppler velocities)
-            gmf=n.abs(fft.fft(o.acc_phasors[ai,:]*echo,len(echo)))**2.0
-            mi=n.argmax(gmf)
-            GA[ai,ri]=gmf[mi]
-            
-            if ai==0:
-                gmf_dc_vec[ri]=gmf[0]
-            
-            if gmf[mi]>gmf_vec[ri]: 
-                gmf_vec[ri]=gmf[mi]
-                v_vec[ri]=o.range_rates[mi]
-                a_vec[ri]=a
-#    plt.pcolormesh(o.rgs,o.accs,GA)
-#    plt.show()
-
 
     if plott:
         plt.plot(gmf_vec)
@@ -128,6 +162,11 @@ def analyze_ipps_fine(d,
                       n_a=40,
                       noise_pwr=1.0,
                       plott=False):
+
+    """
+    This is a high resolution grid search with range migration. Not fast enough to be used for detection, but 
+    useful for refining parameters.
+    """
     
     # read data vector with n_ipps, and a little extra
     z_tx=d.read_vector_c81d(i0,(o.n_ipp+o.n_extra)*o.ipp,o.tx_channel)
@@ -201,3 +240,38 @@ def analyze_ipps_fine(d,
     return([best_snr,xhat[0],xhat[1],xhat[2]])
 
 
+
+def basic_test():
+    import matplotlib.pyplot as plt
+    z_tx=n.zeros(10000,dtype=n.complex64)
+    z_rx=n.zeros(12000,dtype=n.complex64)    
+    for i in range(10):
+        z_tx[(i*1000):(i*1000+20)]=1.0
+        z_rx[(i*1000+500):(i*1000+(500+20))]=0.5 # simulated "echo"
+    
+    dec=10
+    acc_phasors=n.zeros([20,1000],dtype=n.complex64)
+    acc_phasors[0,:]=1.0
+    rgs=n.zeros(1000,dtype=n.float32)#arange(700,dtype=n.int64)
+    for ri in range(len(rgs)):
+        rgs[ri]=ri
+    n_r=len(rgs)
+    gmf_vec=n.zeros(n_r,dtype=n.float32);
+    gmf_dc_vec=n.zeros(n_r,dtype=n.float32);
+    v_vec=n.zeros(n_r,dtype=n.float32);
+    a_vec=n.zeros(n_r,dtype=n.float32);
+    cput0=time.time()
+    for i in range(20):
+        gmf(z_tx,z_rx,acc_phasors,rgs,dec,gmf_vec,gmf_dc_vec,v_vec,a_vec)
+    cput1=time.time()
+    print("Execution time %1.2f"%(cput1-cput0))
+    ri=n.argmax(gmf_vec)
+    print("Got")
+    print("Rmax %d gmf %1.2f v %1.2f a %1.2f"%(ri,gmf_vec[ri],v_vec[ri],a_vec[ri]))
+    print("Should be")
+    print("Rmax 500 gmf 1e+04 v 0.00 a 0.00")
+
+
+if __name__ == "__main__":
+    basic_test()
+    

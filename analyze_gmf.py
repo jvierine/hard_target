@@ -1,5 +1,7 @@
 #!/usr/bin/env python
-
+# 
+# This script walks through a digital rf recording and analyses the data with generalized match function.
+#
 import h5py
 import numpy as n
 import os
@@ -69,7 +71,16 @@ def analyze_gmf(conf,
             for i in range(conf.num_cohints_per_file):
                 i0=fi + i*conf.ipp*conf.n_ipp
                 
-                gmf_max[i,:], gmf_dc[i,:], gmf_v[i,:], gmf_a[i,:], gmf_txp[i] = g.analyze_ipps(d,i0,conf)
+                gmf_result = g.analyze_ipps(d,i0,conf)
+
+                if gmf_result != None:
+                    gmf_max[i,:]=gmf_result["gmf"]
+                    gmf_v[i,:]=gmf_result["vel"]
+                    gmf_a[i,:]=gmf_result["acc"]
+                    gmf_txp[i] = gmf_result["tx_pwr"]
+                else:
+                    print("Skipped this integration period because of missing data")
+                
                 rgi=n.argmax(gmf_max[i,:])
 
             os.system("mkdir -p %s"%(hdname))
@@ -90,5 +101,5 @@ if __name__ == "__main__":
     else:
         print("Provide configuration file as command line option")
         exit(0)
-    print(conf)
+#    print(conf)
     analyze_gmf(conf)

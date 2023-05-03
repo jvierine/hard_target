@@ -25,6 +25,7 @@ class gmf_opts:
         for e in dir(self):
             if not callable(getattr(self,e)) and not e.startswith("__"):
                 out+="%s = %s\n"%(e,getattr(self,e))
+
         return(out)
 
     def set_n_ranges(self, range_gate_0, n_range_gates):
@@ -48,6 +49,8 @@ class gmf_opts:
         c["config"]={"n_ipp":'5',
                      "data_dirs":'["/data0/2020.10.15/test1e6_4.04e6","/data1/2020.10.15/test1e6_4.04e6"]',
                      "sample_rate":'1000000',
+                     "eiscat_dir":'"none"',
+                     "drf_dir":'"none"',                                          
                      "n_range_gates":'10000',
                      "range_gate_0":'200',
                      "range_gate_step":'1',
@@ -95,7 +98,8 @@ class gmf_opts:
         self.data_dirs=json.loads(c["config"]["data_dirs"])
         # for conversion
         self.eiscat_dir=json.loads(c["config"]["eiscat_dir"])
-        self.drf_dir=json.loads(c["config"]["drf_dir"])                
+        self.drf_dir=json.loads(c["config"]["drf_dir"])
+        
         print(self.data_dirs)
         self.sample_rate=float(json.loads(c["config"]["sample_rate"]))
         self.n_range_gates=int(json.loads(c["config"]["n_range_gates"]))

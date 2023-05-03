@@ -41,7 +41,13 @@ if __name__ == "__main__":
    #     exit(1)
         
     idir=conf.eiscat_dir#sys.argv[1]
+    if idir == "none":
+        print("The directory to EISCAT formatted .mat.bz2 data is not specified in configuration file. Exiting.")
     odir=conf.drf_dir
+    if odir == "none":
+        print("The directory to output digital rf data is not specified in configuration file. Exiting.")
+    
+
     os.system("mkdir -p %s"%(odir))
     
     # uhf is the name of the raw voltaga channel

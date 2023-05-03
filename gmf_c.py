@@ -7,7 +7,6 @@ _fmed.gmf.restype = C.c_int
 _fmed.gmf.argtypes = [C.POINTER(C.c_float), C.c_int, C.POINTER(C.c_float), C.c_int, C.POINTER(C.c_float), C.c_int, C.POINTER(C.c_float), C.c_int, C.c_int, C.POINTER(C.c_float), C.POINTER(C.c_float), C.POINTER(C.c_float), C.POINTER(C.c_float)]
 
 def gmf(z_tx, z_rx, acc_phasors, rgs, dec, gmf_vec, gmf_dc_vec, v_vec, a_vec, rank=0):
-    print("Using C")
     txlen=int(len(z_tx))
     rxlen=len(z_rx)
     a=_fmed.gmf(z_tx.ctypes.data_as(C.POINTER(C.c_float)),
