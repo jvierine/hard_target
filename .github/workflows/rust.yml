@@ -1,0 +1,13 @@
+name: Rust
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: sudo apt-get update && sudo apt-get install -y libopenmpi-dev openmpi-bin libclang-dev libhdf5-dev
+      - run: cargo test --workspace --release --features mpi
+      - run: cargo check --all-targets --all-features
+      - run: cargo build --release --features mpi --example validate_mpi
+      - run: RAYON_NUM_THREADS=1 mpirun --oversubscribe -n 4 target/release/examples/validate_mpi

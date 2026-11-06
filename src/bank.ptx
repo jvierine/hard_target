@@ -1,0 +1,111 @@
+.version 7.0
+.target sm_52
+.address_size 64
+.visible .entry match_bins(
+ .param .u64 tx, .param .u64 rx, .param .u64 output,
+ .param .u64 decimation, .param .u64 gates, .param .u64 delays, .param .u64 total
+) {
+ .reg .pred %p;
+ .reg .b32 %t,%b,%s,%lane,%lo,%hi,%lo2,%hi2,%delta;
+ .reg .b64 %i,%n,%g,%d,%l,%len,%pulse,%gate,%start,%end,%j,%a,%bb,%off,%in,%out,%tmp,%rx,%delays;
+ .reg .f32 %ar,%ai,%br,%bi,%r,%im,%u,%v,%sr,%si;
+ ld.param.u64 %in,[tx]; ld.param.u64 %rx,[rx]; ld.param.u64 %out,[output];
+ ld.param.u64 %delays,[delays]; ld.param.u64 %d,[decimation]; ld.param.u64 %g,[gates]; ld.param.u64 %n,[total];
+ mov.u32 %t,%tid.x; mov.u32 %b,%ctaid.x; mov.u32 %s,%ntid.x;
+ mad.lo.u32 %t,%b,%s,%t; and.b32 %lane,%t,31; shr.u32 %t,%t,5; cvt.u64.u32 %i,%t;
+ setp.ge.u64 %p,%i,%n; @%p bra DONE;
+ div.u64 %pulse,%i,%g; rem.u64 %gate,%i,%g;
+ mul.lo.u64 %tmp,%pulse,8; add.u64 %tmp,%delays,%tmp; ld.global.u64 %l,[%tmp];
+ mul.lo.u64 %start,%gate,%d; add.u64 %end,%start,%d; cvt.u64.u32 %j,%lane; add.u64 %j,%j,%start;
+ mov.f32 %sr,0f00000000; mov.f32 %si,0f00000000;
+setp.ge.u64 %p,%j,%end; @%p bra REDUCE;
+LOOP:
+ mul.lo.u64 %off,%j,8; add.u64 %bb,%in,%off;
+ add.u64 %tmp,%j,%l; mul.lo.u64 %off,%tmp,8; add.u64 %a,%rx,%off;
+ ld.global.f32 %ar,[%a]; ld.global.f32 %ai,[%a+4];
+ ld.global.f32 %br,[%bb]; ld.global.f32 %bi,[%bb+4];
+ mul.rn.f32 %u,%ar,%br; mul.rn.f32 %v,%ai,%bi; add.rn.f32 %r,%u,%v;
+ mul.rn.f32 %u,%ai,%br; mul.rn.f32 %v,%ar,%bi; sub.rn.f32 %im,%u,%v;
+ add.rn.f32 %sr,%sr,%r; add.rn.f32 %si,%si,%im;
+ add.u64 %j,%j,32; setp.lt.u64 %p,%j,%end; @%p bra LOOP;
+REDUCE:
+ mov.u32 %delta,16;
+SHUFFLE:
+ mov.b32 %lo,%sr;
+ shfl.sync.bfly.b32 %lo2,%lo,%delta,31,-1;
+ mov.b32 %u,%lo2; add.rn.f32 %sr,%sr,%u;
+ mov.b32 %lo,%si;
+ shfl.sync.bfly.b32 %lo2,%lo,%delta,31,-1;
+ mov.b32 %u,%lo2; add.rn.f32 %si,%si,%u;
+ shr.u32 %delta,%delta,1; setp.ne.u32 %p,%delta,0; @%p bra SHUFFLE;
+ setp.ne.u32 %p,%lane,0; @%p bra DONE;
+ mul.lo.u64 %off,%i,8; add.u64 %out,%out,%off;
+ st.global.f32 [%out],%sr; st.global.f32 [%out+4],%si;
+DONE: ret;
+}
+
+.visible .entry rotate_bins(.param .u64 input,.param .u64 phasors,.param .u64 output,.param .u64 fft_len,.param .u64 total){
+ .reg .pred %p;
+ .reg .b32 %t,%b,%s;
+ .reg .b64 %i,%j,%n,%len,%in,%ph,%out,%off,%a,%bb,%dest;
+ .reg .f32 %ar,%ai,%br,%bi,%u,%v,%r,%im;
+ ld.param.u64 %in,[input];ld.param.u64 %ph,[phasors];ld.param.u64 %out,[output];ld.param.u64 %len,[fft_len];ld.param.u64 %n,[total];
+ mov.u32 %t,%tid.x;mov.u32 %b,%ctaid.x;mov.u32 %s,%ntid.x;mad.lo.u32 %t,%b,%s,%t;cvt.u64.u32 %i,%t;
+ setp.ge.u64 %p,%i,%n;@%p bra END;
+ rem.u64 %j,%i,%len;mul.lo.u64 %off,%j,8;add.u64 %bb,%ph,%off;
+ mul.lo.u64 %off,%i,8;add.u64 %a,%in,%off;add.u64 %dest,%out,%off;
+ ld.global.f32 %ar,[%a];ld.global.f32 %ai,[%a+4];ld.global.f32 %br,[%bb];ld.global.f32 %bi,[%bb+4];
+ mul.rn.f32 %u,%ar,%br;mul.rn.f32 %v,%ai,%bi;sub.rn.f32 %r,%u,%v;
+ mul.rn.f32 %u,%ar,%bi;mul.rn.f32 %v,%ai,%br;add.rn.f32 %im,%u,%v;
+ st.global.f32 [%dest],%r;st.global.f32 [%dest+4],%im;
+END:ret;
+}
+
+// CA-CFAR and local-maximum test. Output is compact [row,bin,power,noise].
+.visible .entry cfar_detect(.param .u64 spectrum,.param .u64 output,.param .u64 counter,.param .u64 fft_len,.param .u64 total,.param .u32 training,.param .u32 guard,.param .f32 threshold,.param .u32 capacity,.param .u32 range_train,.param .u32 range_guard,.param .u32 rows,.param .f32 log_pfa,.param .f32 minimum){
+ .reg .pred %p,%q;
+ .reg .b32 %t,%b,%bs,%nt,%ng,%j,%slot,%cap,%r32,%k32,%rt,%rg,%rows,%nr,%ri;
+ .reg .b64 %i,%n,%len,%row,%k,%base,%off,%a,%in,%out,%count,%x,%left,%right,%delta;
+ .reg .f32 %re,%im,%cut,%near,%sum,%v,%noise,%ratio,%rf,%kf,%rnoise,%alpha,%lp,%min;
+ ld.param.u64 %in,[spectrum];ld.param.u64 %out,[output];ld.param.u64 %count,[counter];ld.param.u64 %len,[fft_len];ld.param.u64 %n,[total];
+ ld.param.u32 %nt,[training];ld.param.u32 %ng,[guard];ld.param.f32 %ratio,[threshold];ld.param.u32 %cap,[capacity];
+ mov.u32 %t,%tid.x;mov.u32 %b,%ctaid.x;mov.u32 %bs,%ntid.x;mad.lo.u32 %t,%b,%bs,%t;cvt.u64.u32 %i,%t;setp.ge.u64 %p,%i,%n;@%p bra END;
+ div.u64 %row,%i,%len;rem.u64 %k,%i,%len;mul.lo.u64 %base,%row,%len;
+ mul.lo.u64 %off,%i,8;add.u64 %a,%in,%off;ld.global.f32 %re,[%a];ld.global.f32 %im,[%a+4];mul.f32 %cut,%re,%re;fma.rn.f32 %cut,%im,%im,%cut;
+ add.u64 %x,%k,%len;sub.u64 %x,%x,1;rem.u64 %x,%x,%len;add.u64 %x,%x,%base;mul.lo.u64 %off,%x,8;add.u64 %a,%in,%off;ld.global.f32 %re,[%a];ld.global.f32 %im,[%a+4];mul.f32 %near,%re,%re;fma.rn.f32 %near,%im,%im,%near;setp.le.f32 %p,%cut,%near;@%p bra END;
+ add.u64 %x,%k,1;rem.u64 %x,%x,%len;add.u64 %x,%x,%base;mul.lo.u64 %off,%x,8;add.u64 %a,%in,%off;ld.global.f32 %re,[%a];ld.global.f32 %im,[%a+4];mul.f32 %near,%re,%re;fma.rn.f32 %near,%im,%im,%near;setp.lt.f32 %p,%cut,%near;@%p bra END;
+ mov.f32 %sum,0f00000000;mov.u32 %j,1;
+TRAIN:
+ add.u32 %t,%j,%ng;cvt.u64.u32 %delta,%t;add.u64 %left,%k,%len;sub.u64 %left,%left,%delta;rem.u64 %left,%left,%len;add.u64 %right,%k,%delta;rem.u64 %right,%right,%len;
+ add.u64 %x,%left,%base;mul.lo.u64 %off,%x,8;add.u64 %a,%in,%off;ld.global.f32 %re,[%a];ld.global.f32 %im,[%a+4];fma.rn.f32 %sum,%re,%re,%sum;fma.rn.f32 %sum,%im,%im,%sum;
+ add.u64 %x,%right,%base;mul.lo.u64 %off,%x,8;add.u64 %a,%in,%off;ld.global.f32 %re,[%a];ld.global.f32 %im,[%a+4];fma.rn.f32 %sum,%re,%re,%sum;fma.rn.f32 %sum,%im,%im,%sum;
+ add.u32 %j,%j,1;setp.le.u32 %p,%j,%nt;@%p bra TRAIN;
+ shl.b32 %t,%nt,1;cvt.rn.f32.u32 %v,%t;div.rn.f32 %noise,%sum,%v;setp.le.f32 %p,%noise,0f00000000;@%p bra END;mul.f32 %v,%noise,%ratio;setp.le.f32 %p,%cut,%v;@%p bra END;
+ ld.param.u32 %rt,[range_train];setp.eq.u32 %p,%rt,0;@%p bra ACCEPT;
+ ld.param.u32 %rg,[range_guard];ld.param.u32 %rows,[rows];ld.param.f32 %lp,[log_pfa];ld.param.f32 %min,[minimum];mov.u32 %nr,0;mov.f32 %sum,0f00000000;mov.u32 %j,1;cvt.u32.u64 %r32,%row;
+RTRAIN:
+ add.u32 %t,%rg,%j;setp.lt.u32 %p,%r32,%t;@%p bra RIGHT;
+ sub.u32 %ri,%r32,%t;cvt.u64.u32 %x,%ri;mul.lo.u64 %x,%x,%len;add.u64 %x,%x,%k;mul.lo.u64 %off,%x,8;add.u64 %a,%in,%off;ld.global.f32 %re,[%a];ld.global.f32 %im,[%a+4];fma.rn.f32 %sum,%re,%re,%sum;fma.rn.f32 %sum,%im,%im,%sum;add.u32 %nr,%nr,1;
+RIGHT:
+ add.u32 %ri,%r32,%t;setp.ge.u32 %p,%ri,%rows;@%p bra RNEXT;
+ cvt.u64.u32 %x,%ri;mul.lo.u64 %x,%x,%len;add.u64 %x,%x,%k;mul.lo.u64 %off,%x,8;add.u64 %a,%in,%off;ld.global.f32 %re,[%a];ld.global.f32 %im,[%a+4];fma.rn.f32 %sum,%re,%re,%sum;fma.rn.f32 %sum,%im,%im,%sum;add.u32 %nr,%nr,1;
+RNEXT:
+ add.u32 %j,%j,1;setp.le.u32 %p,%j,%rt;@%p bra RTRAIN;
+ setp.lt.u32 %p,%nr,4;@%p bra END;cvt.rn.f32.u32 %v,%nr;div.rn.f32 %rnoise,%sum,%v;setp.le.f32 %p,%rnoise,0f00000000;@%p bra END;div.rn.f32 %alpha,%lp,%v;ex2.approx.f32 %alpha,%alpha;sub.f32 %alpha,%alpha,0f3f800000;mul.f32 %alpha,%alpha,%v;max.f32 %alpha,%alpha,%min;mul.f32 %v,%rnoise,%alpha;setp.le.f32 %p,%cut,%v;@%p bra END;max.f32 %noise,%noise,%rnoise;
+ACCEPT:
+ atom.global.add.u32 %slot,[%count],1;setp.ge.u32 %p,%slot,%cap;@%p bra END;
+ cvt.u64.u32 %x,%slot;mul.lo.u64 %off,%x,16;add.u64 %a,%out,%off;cvt.u32.u64 %r32,%row;cvt.u32.u64 %k32,%k;cvt.rn.f32.u32 %rf,%r32;cvt.rn.f32.u32 %kf,%k32;
+ st.global.f32 [%a],%rf;st.global.f32 [%a+4],%kf;st.global.f32 [%a+8],%cut;st.global.f32 [%a+12],%noise;
+END:ret;
+}
+
+.visible .entry match_pointwise(.param .u64 tx,.param .u64 rx,.param .u64 output,.param .u64 decimation,.param .u64 gates,.param .u64 delays,.param .u64 total){
+ .reg .pred %p;.reg .b32 %t,%b,%s;.reg .b64 %i,%n,%g,%row,%k,%shift,%d,%a,%bb,%dest,%in,%rx,%out,%ds,%off;
+ .reg .f32 %ar,%ai,%br,%bi,%re,%im,%v;
+ ld.param.u64 %in,[tx];ld.param.u64 %rx,[rx];ld.param.u64 %out,[output];ld.param.u64 %g,[gates];ld.param.u64 %n,[total];ld.param.u64 %ds,[delays];
+ mov.u32 %t,%tid.x;mov.u32 %b,%ctaid.x;mov.u32 %s,%ntid.x;mad.lo.u32 %t,%b,%s,%t;cvt.u64.u32 %i,%t;setp.ge.u64 %p,%i,%n;@%p bra END;
+ div.u64 %row,%i,%g;rem.u64 %k,%i,%g;mul.lo.u64 %off,%row,8;add.u64 %a,%ds,%off;ld.global.u64 %shift,[%a];
+ add.u64 %d,%k,%shift;mul.lo.u64 %off,%d,8;add.u64 %a,%rx,%off;mul.lo.u64 %off,%k,8;add.u64 %bb,%in,%off;mul.lo.u64 %off,%i,8;add.u64 %dest,%out,%off;
+ ld.global.f32 %ar,[%a];ld.global.f32 %ai,[%a+4];ld.global.f32 %br,[%bb];ld.global.f32 %bi,[%bb+4];mul.f32 %re,%ar,%br;fma.rn.f32 %re,%ai,%bi,%re;mul.f32 %im,%ai,%br;mul.f32 %v,%ar,%bi;sub.f32 %im,%im,%v;st.global.f32 [%dest],%re;st.global.f32 [%dest+4],%im;
+END:ret;
+}

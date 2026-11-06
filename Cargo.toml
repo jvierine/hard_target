@@ -1,0 +1,42 @@
+[package]
+name = "hard-target"
+version = "0.1.0"
+edition = "2021"
+description = "SIMD, CUDA and MPI radar matched filtering"
+
+[workspace]
+members = ["crates/hard-target-signal"]
+resolver = "2"
+
+[features]
+default = []
+mpi = ["dep:mpi"]
+cuda = ["dep:cudarc"]
+arecibo = ["dep:guisdap-digital-rf", "dep:guisdap-millstone", "dep:hdf5"]
+
+[dependencies]
+anyhow = "1"
+num-complex = "0.4"
+rayon = "1"
+rustfft = "6"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+hard-target-signal = { path = "crates/hard-target-signal" }
+mpi = { version = "0.8", optional = true }
+cudarc = { version = "=0.19.10", optional = true, default-features = false, features = ["std", "driver", "nvrtc", "cufft", "dynamic-loading", "cuda-12000"] }
+hdf5 = { package = "hdf5-metno", version = "0.12", optional = true }
+guisdap-digital-rf = { git = "https://github.com/jvierine/ruisdap", rev = "33a52b3040dca26d4706c4113ba678625367d2ea", optional = true }
+guisdap-millstone = { git = "https://github.com/jvierine/ruisdap", rev = "33a52b3040dca26d4706c4113ba678625367d2ea", optional = true }
+
+[[example]]
+name = "validate_mpi"
+required-features = ["mpi"]
+[[example]]
+name = "arecibo_scan"
+required-features = ["arecibo"]
+[[example]]
+name = "arecibo_products"
+required-features = ["arecibo"]
+[[example]]
+name = "plasma_highpass"
+required-features = ["arecibo"]

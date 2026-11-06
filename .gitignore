@@ -86,3 +86,6 @@ cache_error*
 *.log
 .*.sw[op]
 
+
+# Rust build products
+/target/
